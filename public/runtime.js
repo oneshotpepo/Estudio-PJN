@@ -54,7 +54,9 @@
     return ref;
   };
   // refleja enseguida lo que escribe esta pestaña (sin esperar al próximo sondeo)
-  const local = (col, id, data) => { const s = SUBS.get(col); if (!s) return; if (data == null) s.docs.delete(id); else s.docs.set(id, JSON.parse(JSON.stringify(data))); setTimeout(() => avisar(col), 0); };
+  // y avisa en el momento: la app abre el escrito recién creado apenas vuelve add() y lo busca en su lista
+  // (con el aviso demorado no lo encontraba y el escrito quedaba sin expediente: Claude redactaba con [COMPLETAR])
+  const local = (col, id, data) => { const s = SUBS.get(col); if (!s) return; if (data == null) s.docs.delete(id); else s.docs.set(id, JSON.parse(JSON.stringify(data))); avisar(col); };
   const colRef = (col, orden = null, limite = null) => ({
     id: col.split('/').pop(), path: col,
     doc: (id) => docRef(col + '/' + (id || Math.random().toString(36).slice(2) + Date.now().toString(36))),
