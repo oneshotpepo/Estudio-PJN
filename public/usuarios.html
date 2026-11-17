@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Usuarios y gasto</title>
+<style>
+:root { --paper:#f3f5f3; --panel:#fff; --ink:#142220; --muted:#5a6966; --line:#d8dfdc; --accent:#1d5a52; --accent-ink:#fff; --urgent:#b3261e; --ok:#2c6a3a; }
+@media (prefers-color-scheme: dark) { :root { --paper:#0e1514; --panel:#152120; --ink:#e5ecea; --muted:#92a29e; --line:#24322f; --accent:#62b3a7; --accent-ink:#08201c; --urgent:#ff8f84; --ok:#82c991; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--paper); color:var(--ink); font:14px/1.45 "Helvetica Neue", Arial, sans-serif; }
+main { max-width:60rem; margin:0 auto; padding:24px 16px 48px; display:grid; gap:18px; }
+h1 { margin:0; font-size:24px; } h2 { margin:0 0 10px; font-size:15px; }
+section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; overflow:auto; }
+table { border-collapse:collapse; width:100%; font-size:13px; } th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+th { font-size:11.5px; text-transform:uppercase; color:var(--muted); }
+form { display:flex; flex-wrap:wrap; gap:8px; align-items:end; } label { display:grid; gap:3px; font-size:12.5px; font-weight:600; }
+input { font:inherit; color:inherit; padding:7px 9px; border:1px solid var(--line); border-radius:6px; background:var(--paper); }
+button { font:inherit; font-weight:600; padding:7px 12px; border:1px solid var(--accent); border-radius:6px; background:var(--accent); color:var(--accent-ink); cursor:pointer; }
+button.sec { background:none; color:var(--accent); }
+.msg { min-height:1em; font-size:13px; } .msg.err { color:var(--urgent); } .msg.ok { color:var(--ok); }
+.big { font-size:28px; font-weight:700; } .muted { color:var(--muted); } a { color:var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <div><a href="/">← Volver a la app</a></div>
+  <h1 id="tit">Usuarios y gasto</h1>
+  <section id="gasto"></section>
+  <section id="mia">
+    <h2>Cambiar mi contraseña</h2>
+    <form id="fmia"><label>Actual <input type="password" name="actual" autocomplete="current-password" required></label>
+      <label>Nueva (10 o más) <input type="password" name="nueva" autocomplete="new-password" minlength="10" required></label><button>Cambiar</button></form>
+    <div class="msg" id="mmia"></div>
+  </section>
+  <section id="adm" hidden>
+    <h2>Usuarios</h2>
+    <div id="lista"></div>
+    <h2 style="margin-top:16px">Agregar usuario o cambiarle la contraseña</h2>
+    <form id="fnuevo"><label>Usuario <input name="usuario" autocapitalize="none" placeholder="grisel" required></label>
+      <label>Nombre <input name="nombre" placeholder="Grisel"></label>
+      <label>Contraseña (10 o más) <input name="clave" type="text" minlength="10" required></label>
+      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="admin"> administrador</label>
+      <button name="op" value="crear">Crear</button><button class="sec" name="op" value="clave">Solo cambiar contraseña</button></form>
+    <div class="msg" id="mnuevo"></div>
+  </section>
+  <section id="ult" hidden><h2>Últimos pedidos a Claude</h2><div id="tult"></div></section>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const usd = (n) => 'US$ ' + (+n || 0).toFixed(2);
+const fecha = (t) => new Date(t).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+async function post(body) { const r = await fetch('/api/usuarios', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'Error'); return j; }
+async function cargar() {
+  const r = await fetch('/api/usuarios', { credentials: 'same-origin' }); if (r.status === 401) { location.href = '/login.html'; return; }
+  const d = await r.json();
+  $('#gasto').innerHTML = `<h2>Gasto de Claude este mes</h2><div class="big">${usd(d.total)} <span class="muted" style="font-size:15px;font-weight:400">de ${usd(d.tope)} de tope</span></div>
+    <table><thead><tr><th>Usuario</th><th>Pedidos</th><th>Gasto</th></tr></thead><tbody>${d.gasto.map((g) => `<tr><td>${esc(g.usuario)}</td><td>${g.pedidos}</td><td>${usd(g.usd)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">Sin pedidos este mes</td></tr>'}</tbody></table>`;
+  if (!d.yo.admin) { $('#tit').textContent = 'Mi cuenta'; return; }
+  $('#adm').hidden = false; $('#ult').hidden = false;
+  $('#lista').innerHTML = `<table><thead><tr><th>Usuario</th><th>Nombre</th><th>Admin</th><th>Estado</th><th></th></tr></thead><tbody>${d.usuarios.map((u) => `<tr><td>${esc(u.usuario)}</td><td>${esc(u.nombre)}</td><td>${u.admin ? 'sí' : ''}</td><td>${u.activo ? 'activo' : 'desactivado'}</td><td>${u.usuario === d.yo.usuario ? '' : `<button class="sec" data-u="${esc(u.usuario)}" data-a="${u.activo ? 0 : 1}">${u.activo ? 'Desactivar' : 'Activar'}</button>`}</td></tr>`).join('')}</tbody></table>`;
+  $('#tult').innerHTML = `<table><thead><tr><th>Cuándo</th><th>Usuario</th><th>Qué</th><th>Tokens</th><th>Gasto</th><th>Segundos</th><th></th></tr></thead><tbody>${(d.ultimos || []).map((x) => `<tr><td>${fecha(x.at)}</td><td>${esc(x.usuario)}</td><td>${esc(x.que)}</td><td>${(x.entrada || 0).toLocaleString('es-AR')} / ${(x.salida || 0).toLocaleString('es-AR')}</td><td>${usd(x.usd)}</td><td>${x.seg ?? ''}</td><td>${x.ok ? '' : '<span style="color:var(--urgent)">' + esc(x.error || 'error') + '</span>'}</td></tr>`).join('')}</tbody></table>`;
+}
+$('#lista').addEventListener('click', async (ev) => { const b = ev.target.closest('button[data-u]'); if (!b) return; try { await post({ op: 'activo', usuario: b.dataset.u, activo: b.dataset.a === '1' }); cargar(); } catch (e) { alert(e.message); } });
+$('#fmia').addEventListener('submit', async (ev) => { ev.preventDefault(); const f = new FormData(ev.target); const m = $('#mmia');
+  try { await post({ op: 'mi_clave', actual: f.get('actual'), nueva: f.get('nueva') }); m.className = 'msg ok'; m.textContent = 'Listo, contraseña cambiada.'; ev.target.reset(); } catch (e) { m.className = 'msg err'; m.textContent = e.message; } });
+$('#fnuevo').addEventListener('submit', async (ev) => { ev.preventDefault(); const f = new FormData(ev.target); const m = $('#mnuevo');
+  try { await post({ op: ev.submitter ? ev.submitter.value : 'crear', usuario: f.get('usuario'), nombre: f.get('nombre'), clave: f.get('clave'), admin: !!f.get('admin') }); m.className = 'msg ok'; m.textContent = 'Listo.'; ev.target.reset(); cargar(); } catch (e) { m.className = 'msg err'; m.textContent = e.message; } });
+cargar();
+</script>
+</body>
+</html>

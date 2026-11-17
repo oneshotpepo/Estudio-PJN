@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Estudio PJN</title>
+<style>
+:root { --paper:#f3f5f3; --panel:#fff; --ink:#142220; --muted:#5a6966; --line:#d8dfdc; --accent:#1d5a52; --accent-ink:#fff; --urgent:#b3261e; }
+@media (prefers-color-scheme: dark) { :root { --paper:#0e1514; --panel:#152120; --ink:#e5ecea; --muted:#92a29e; --line:#24322f; --accent:#62b3a7; --accent-ink:#08201c; --urgent:#ff8f84; } }
+* { box-sizing: border-box; }
+body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--paper); color:var(--ink); font:15px/1.45 "Helvetica Neue", Arial, sans-serif; padding:16px; }
+form { width:min(22rem,100%); background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:28px 24px; display:grid; gap:14px; }
+h1 { margin:0; font-size:22px; } p { margin:0; color:var(--muted); font-size:13.5px; }
+label { display:grid; gap:4px; font-size:13px; font-weight:600; }
+input { font:inherit; color:inherit; padding:10px 12px; border:1px solid var(--line); border-radius:7px; background:var(--paper); }
+button { font:inherit; font-weight:650; padding:10px 12px; border:0; border-radius:7px; background:var(--accent); color:var(--accent-ink); cursor:pointer; }
+button:disabled { opacity:.6; }
+.err { color:var(--urgent); font-size:13.5px; min-height:1em; }
+</style>
+</head>
+<body>
+<form id="f">
+  <div><h1>Estudio PJN</h1><p>Entrá con tu usuario del estudio.</p></div>
+  <label>Usuario <input id="u" autocomplete="username" autocapitalize="none" required></label>
+  <label>Contraseña <input id="c" type="password" autocomplete="current-password" required></label>
+  <button id="b">Entrar</button>
+  <div class="err" id="e" role="alert"></div>
+</form>
+<script>
+document.getElementById('f').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const b = document.getElementById('b'), e = document.getElementById('e');
+  b.disabled = true; e.textContent = '';
+  try {
+    const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+      body: JSON.stringify({ usuario: document.getElementById('u').value, clave: document.getElementById('c').value }) });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) { location.href = '/'; return; }
+    e.textContent = j.error || 'No se pudo entrar.';
+  } catch { e.textContent = 'Sin conexión. Probá de nuevo.'; }
+  b.disabled = false;
+});
+</script>
+</body>
+</html>
