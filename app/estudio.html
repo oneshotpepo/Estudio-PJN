@@ -2520,7 +2520,13 @@ async function enviarApp(x, e, blob, descripcion) {
   await db.doc('cargas/' + pid).set({ estado: 'pedido', pdf_id: up.id, pdf_sha256: await sha256(blob), numero: e.numero, caratula: e.caratula, descripcion, escrito_id: x.id, expediente_id: e.id, de: MI_UID || null, at });
   const envio = { id: pid, estado: 'enviado', at, descripcion };
   await db.doc('escritos/' + x.id).update({ envio, estado: 'Listo' });
-  return envio;
+  // la app lo presenta en el PJN en el momento (tarda unos segundos) y deja el resultado en el escrito
+  try {
+    const r = await fetch('/api/carga', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: pid }) });
+    const j = await r.json().catch(() => null);
+    if (r.ok && j && j.estado) return { ...envio, estado: j.estado, mensaje: j.mensaje || '', pjn_ids: j.pjn_ids || [], destino: j.destino || '', fecha: j.fecha || '' };
+  } catch {}
+  return envio; // sin respuesta: queda "mandado"; el resultado aparece en el escrito cuando termina
 }
 async function enviarPjn(x, e, blob, descripcion) {
   if (!mcp) return enviarApp(x, e, blob, descripcion);
@@ -2607,7 +2613,7 @@ function camaraTxt(html) {
 function envioTxt(v) {
   if (!v) return '';
   const loc = new Date(v.at); const hh = `${String(loc.getHours()).padStart(2, '0')}:${String(loc.getMinutes()).padStart(2, '0')}`;
-  if (v.estado === 'enviado') return `Mandado al PJN el ${loc.toLocaleDateString('es-AR')} a las ${hh}. Esperando que la PC del estudio lo cargue (tiene que estar prendida y con el Cargador PJN instalado).`;
+  if (v.estado === 'enviado') return mcp ? `Mandado al PJN el ${loc.toLocaleDateString('es-AR')} a las ${hh}. Esperando que la PC del estudio lo cargue (tiene que estar prendida y con el Cargador PJN instalado).` : `Mandado al PJN el ${loc.toLocaleDateString('es-AR')} a las ${hh}. Si en unos minutos no dice "Cargado", fijate en el PJN si quedó presentado antes de volver a mandarlo.`;
   if (v.estado === 'cargado') return `Cargado en el PJN${v.destino ? ' · ' + v.destino : ''}${v.pjn_ids && v.pjn_ids.length ? ' · ID ' + v.pjn_ids.join(', ') : ''}${v.fecha ? ' · ' + fdy(v.fecha.slice(0, 10)) + ' ' + v.fecha.slice(11, 16) : ''}.`;
   if (v.estado === 'revisar') return 'Atención: ' + (v.mensaje || 'revisá en el PJN si quedó cargado.');
   return 'No se cargó: ' + (v.mensaje || 'error') ;
@@ -2734,7 +2740,7 @@ SALIDA: solo el escrito en HTML simple, un <p> por párrafo, con estas clases: <
     if (!window.jspdf) { toast('No se pudo cargar el generador de PDF.'); return; }
     const actual = S.escritos.find((y) => y.id === id) || x;
     if (false && actual.pide_carga && ['pedido', 'tomado', 'enviado'].includes(actual.pide_carga.estado) && !(actual.envio && actual.envio.estado === 'error')) { toast('Ya está pedido: lo manda al PJN la app del estudio.'); return; }
-    if (actual.envio && ['enviado', 'cargado', 'revisar'].includes(actual.envio.estado)) { toast(actual.envio.estado === 'cargado' ? 'Este escrito ya se cargó al PJN.' : actual.envio.estado === 'enviado' ? 'Ya está mandado: esperá que la PC del estudio lo cargue.' : 'Revisá en el PJN si ya quedó cargado antes de volver a mandarlo.'); return; }
+    if (actual.envio && ['enviado', 'cargado', 'revisar'].includes(actual.envio.estado)) { toast(actual.envio.estado === 'cargado' ? 'Este escrito ya se cargó al PJN.' : actual.envio.estado === 'enviado' ? (mcp ? 'Ya está mandado: esperá que la PC del estudio lo cargue.' : 'Ya está mandado. Fijate en el PJN si quedó presentado antes de volver a mandarlo.') : 'Revisá en el PJN si ya quedó cargado antes de volver a mandarlo.'); return; }
     usarTitulo(); // se carga con el título que figura en el escrito
     await save();
     const hh = html(); const desc = titulo.value.trim().replace(/\s+/g, ' ').slice(0, 180);
@@ -2742,14 +2748,14 @@ SALIDA: solo el escrito en HTML simple, un <p> por párrafo, con estas clases: <
     const blob = pdfBlob(hh);
     const info = h('div', { class: 'pdfinfo' + (traba ? ' bad' : '') }, traba ? h('span', { text: traba }) : h('span', null, 'Se carga como ', h('b', { text: 'ESCRITO' }), ' en el ', h('b', { text: e.numero }), ' · ', e.caratula, ' · Descripción: ', h('b', { text: desc }), '. Va al juzgado o sala del expediente según el encabezamiento ("', camaraTxt(hh), '"). Revisá el PDF: se presenta tal cual se ve.'));
     const acciones = traba ? [] : [{ label: 'Confirmar y cargar al PJN', primary: true, fn: async (cerrar) => {
-      const b = $('.pdfbar .btn.primary'); if (b) { if (b.disabled) return; b.disabled = true; b.textContent = 'Mandando…'; }
+      const b = $('.pdfbar .btn.primary'); if (b) { if (b.disabled) return; b.disabled = true; b.textContent = mcp ? 'Mandando…' : 'Presentando en el PJN…'; }
       if (false) { // (Perona vieja) sin Drive en esta cuenta: lo manda la pestaña del estudio
         const pc = { estado: 'pedido', at: new Date().toISOString(), de: MI_UID || null, desc };
         try { await db.doc('escritos/' + id).update({ html: hh, texto: htmlATexto(hh), titulo: titulo.value, estado: 'Listo', pide_carga: pc }); cerrar(); envioBox.hidden = false; envioBox.dataset.e = 'enviado'; envioBox.textContent = pideCargaTxt(pc); $$('button', estado).forEach((bb) => bb.setAttribute('aria-pressed', String(bb.textContent === 'Listo'))); duenoAtiende().then((ok) => toast(ok ? 'Pedido. Lo manda al PJN la computadora del estudio en unos minutos.' : 'Quedó pedido. La computadora del estudio está apagada ahora: se carga al PJN durante el día, cuando se prenda.')); }
         catch { if (b) { b.disabled = false; b.textContent = 'Confirmar y cargar al PJN'; } toast('No se pudo dejar el pedido. Probá de nuevo.'); }
         return;
       }
-      try { const v = await enviarPjn(actual, e, blob, desc); cerrar(); envioBox.hidden = false; envioBox.dataset.e = v.estado; envioBox.textContent = envioTxt(v); toast('Mandado. La PC del estudio lo carga en el PJN y te aviso acá.'); }
+      try { const v = await enviarPjn(actual, e, blob, desc); cerrar(); envioBox.hidden = false; envioBox.dataset.e = v.estado; envioBox.textContent = envioTxt(v); toast(v.estado === 'cargado' ? 'Cargado al PJN.' : v.estado === 'enviado' ? (mcp ? 'Mandado. La PC del estudio lo carga en el PJN y te aviso acá.' : 'Mandado al PJN. Todavía no llegó la confirmación: mirá el escrito en un minuto.') : v.estado === 'revisar' ? 'Atención: revisá en el PJN si quedó cargado.' : 'No se cargó: ' + (v.mensaje || 'error')); }
       catch (err) { if (b) { b.disabled = false; b.textContent = 'Confirmar y cargar al PJN'; } toast(err && err.code === 'not_granted' ? 'No se dio permiso para usar Google Drive.' : 'No se pudo mandar: ' + ((err && err.message) || 'error')); }
     } }];
     verPdf(blob, 'Cargar al PJN · ' + nombre('pdf'), acciones, info);

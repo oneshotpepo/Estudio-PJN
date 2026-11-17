@@ -43,7 +43,11 @@ Abre en http://localhost:3000.
 
 ## Carga al PJN (app nueva)
 
-El botón "Cargar al PJN" guarda el PDF en la app (colección `cargas`). El Cargador PJN de la PC (`scripts/carga_pjn/cargador_pjn.py`,
-con `puente_app.py` al lado) pregunta cada 30 segundos por pedidos nuevos (`/api/subir?op=cargas`), los baja a la carpeta
-"Carga PJN" de siempre, los presenta y avisa el resultado (`op=carga_res`), que deja el escrito en Presentado.
-Usa la misma dirección y clave de `vercel_subir.txt`.
+El botón "Cargar al PJN" guarda el PDF en la app (colección `cargas`) y llama a `/api/carga`, que lo presenta en el momento
+con la cuenta del PJN cargada en Vercel y deja el resultado en el escrito (pasa a Presentado). Nada corre en la PC.
+
+- `api/carga.js`: toma el pedido una sola vez, anota el intento en la tabla `pjn_envios` antes de mandarlo (un mismo PDF no
+  se presenta dos veces) y llama a `api/pjn.py`.
+- `api/pjn.py` + `pjnlib/`: el cliente del PJN (el mismo código que usaba el Cargador de la PC). Solo acepta llamadas con `SUBIR_TOKEN`.
+- Variables en Vercel: `PJN_USER`, `PJN_PASSWORD` y, opcional, `PJN_NOMBRE` (nombre de la cuenta esperada; si entra otra, no presenta).
+- En "Usuarios y gasto" hay un botón para probar la conexión con el PJN sin presentar nada.
