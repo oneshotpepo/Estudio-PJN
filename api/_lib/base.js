@@ -34,6 +34,8 @@ export async function base() {
         entrada integer, salida integer, cache_lee integer, cache_escribe integer, usd numeric(12,6), seg numeric(8,1), ok boolean, error text);
       create index if not exists uso_at on uso (at);
       alter table archivos add column if not exists gz boolean not null default false;
+      create table if not exists pjn_envios (
+        clave text primary key, estado text not null, at timestamptz not null default now(), usuario text, carga_id text, datos jsonb);
     `);
   })().catch((e) => { _listo = null; throw e; });
   await _listo;

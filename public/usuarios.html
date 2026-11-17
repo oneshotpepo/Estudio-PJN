@@ -45,6 +45,12 @@ button.sec { background:none; color:var(--accent); }
       <button name="op" value="crear">Crear</button><button class="sec" name="op" value="clave">Solo cambiar contraseña</button></form>
     <div class="msg" id="mnuevo"></div>
   </section>
+  <section id="pjn" hidden>
+    <h2>Carga al PJN</h2>
+    <p class="muted" style="margin:0 0 10px">La app presenta los escritos con el usuario del PJN cargado en Vercel (PJN_USER y PJN_PASSWORD). Esta prueba solo entra al PJN y mira que la cuenta pueda presentar. No presenta nada.</p>
+    <button id="bpjn" class="sec">Probar conexión con el PJN</button>
+    <div class="msg" id="mpjn" style="margin-top:8px"></div>
+  </section>
   <section id="ult" hidden><h2>Últimos pedidos a Claude</h2><div id="tult"></div></section>
 </main>
 <script>
@@ -59,7 +65,7 @@ async function cargar() {
   $('#gasto').innerHTML = `<h2>Gasto de Claude este mes</h2><div class="big">${usd(d.total)} <span class="muted" style="font-size:15px;font-weight:400">de ${usd(d.tope)} de tope</span></div>
     <table><thead><tr><th>Usuario</th><th>Pedidos</th><th>Gasto</th></tr></thead><tbody>${d.gasto.map((g) => `<tr><td>${esc(g.usuario)}</td><td>${g.pedidos}</td><td>${usd(g.usd)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">Sin pedidos este mes</td></tr>'}</tbody></table>`;
   if (!d.yo.admin) { $('#tit').textContent = 'Mi cuenta'; return; }
-  $('#adm').hidden = false; $('#ult').hidden = false;
+  $('#adm').hidden = false; $('#ult').hidden = false; $('#pjn').hidden = false;
   $('#lista').innerHTML = `<table><thead><tr><th>Usuario</th><th>Nombre</th><th>Admin</th><th>Estado</th><th></th></tr></thead><tbody>${d.usuarios.map((u) => `<tr><td>${esc(u.usuario)}</td><td>${esc(u.nombre)}</td><td>${u.admin ? 'sí' : ''}</td><td>${u.activo ? 'activo' : 'desactivado'}</td><td>${u.usuario === d.yo.usuario ? '' : `<button class="sec" data-u="${esc(u.usuario)}" data-a="${u.activo ? 0 : 1}">${u.activo ? 'Desactivar' : 'Activar'}</button>`}</td></tr>`).join('')}</tbody></table>`;
   $('#tult').innerHTML = `<table><thead><tr><th>Cuándo</th><th>Usuario</th><th>Qué</th><th>Tokens</th><th>Gasto</th><th>Segundos</th><th></th></tr></thead><tbody>${(d.ultimos || []).map((x) => `<tr><td>${fecha(x.at)}</td><td>${esc(x.usuario)}</td><td>${esc(x.que)}</td><td>${(x.entrada || 0).toLocaleString('es-AR')} / ${(x.salida || 0).toLocaleString('es-AR')}</td><td>${usd(x.usd)}</td><td>${x.seg ?? ''}</td><td>${x.ok ? '' : '<span style="color:var(--urgent)">' + esc(x.error || 'error') + '</span>'}</td></tr>`).join('')}</tbody></table>`;
 }
@@ -68,6 +74,11 @@ $('#fmia').addEventListener('submit', async (ev) => { ev.preventDefault(); const
   try { await post({ op: 'mi_clave', actual: f.get('actual'), nueva: f.get('nueva') }); m.className = 'msg ok'; m.textContent = 'Listo, contraseña cambiada.'; ev.target.reset(); } catch (e) { m.className = 'msg err'; m.textContent = e.message; } });
 $('#fnuevo').addEventListener('submit', async (ev) => { ev.preventDefault(); const f = new FormData(ev.target); const m = $('#mnuevo');
   try { await post({ op: ev.submitter ? ev.submitter.value : 'crear', usuario: f.get('usuario'), nombre: f.get('nombre'), clave: f.get('clave'), admin: !!f.get('admin') }); m.className = 'msg ok'; m.textContent = 'Listo.'; ev.target.reset(); cargar(); } catch (e) { m.className = 'msg err'; m.textContent = e.message; } });
+$('#bpjn').addEventListener('click', async () => { const m = $('#mpjn'), b = $('#bpjn'); b.disabled = true; m.className = 'msg'; m.textContent = 'Probando, puede tardar hasta un minuto…';
+  try { const r = await fetch('/api/carga', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ op: 'probar' }) }); const j = await r.json().catch(() => ({}));
+    m.className = 'msg ' + (j.ok ? 'ok' : 'err'); m.textContent = j.mensaje || j.error || 'No hubo respuesta.'; }
+  catch (e) { m.className = 'msg err'; m.textContent = 'No hubo respuesta: ' + e.message; }
+  b.disabled = false; });
 cargar();
 </script>
 </body>
