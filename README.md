@@ -40,3 +40,10 @@ DATABASE_URL=postgres://... ADMIN_CLAVE=... SUBIR_TOKEN=... ANTHROPIC_API_KEY=..
 ```
 
 Abre en http://localhost:3000.
+
+## Carga al PJN (app nueva)
+
+El botón "Cargar al PJN" guarda el PDF en la app (colección `cargas`). El Cargador PJN de la PC (`scripts/carga_pjn/cargador_pjn.py`,
+con `puente_app.py` al lado) pregunta cada 30 segundos por pedidos nuevos (`/api/subir?op=cargas`), los baja a la carpeta
+"Carga PJN" de siempre, los presenta y avisa el resultado (`op=carga_res`), que deja el escrito en Presentado.
+Usa la misma dirección y clave de `vercel_subir.txt`.

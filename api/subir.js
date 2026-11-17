@@ -4,6 +4,7 @@
 //   (con cabecera x-gzip: 1 si el cuerpo es JSON comprimido: se sirve tal cual con Content-Encoding gzip)
 //   POST /api/subir?op=tiene  JSON {ids:[...]} -> {tiene:[...]} cuáles ya están (para no subir de nuevo)
 //   POST /api/subir?op=docs   JSON {col, docs:[{id, data}], merge?} -> guarda documentos
+//   POST /api/subir?op=cargas -> {cargas:[...]} pedidos de carga al PJN pendientes; op=carga_pdf {id} -> el PDF; op=carga_res {id, estado, ...} -> anota el resultado
 //   POST /api/subir?op=limpiar JSON {mantener:[ids]} -> borra archivos de la PC que ya no se usan (solo los subidos por "pc")
 import crypto from 'node:crypto';
 import { base, sinNulos } from './_lib/base.js';
@@ -69,6 +70,36 @@ export default async function handler(req, res) {
       if (mantener.length < 1) return res.status(400).json({ error: 'Falta la lista de archivos a mantener' });
       const r = await s`delete from archivos where de = 'pc' and at < now() - interval '2 days' and not (id = any(${mantener})) returning id`;
       return res.status(200).json({ ok: true, borrados: r.length });
+    }
+    // ---- carga al PJN: el Cargador de la PC baja los pedidos que dejó la app y avisa cómo terminaron
+    if (q.op === 'cargas') {
+      const r = await s`select id, data from docs where col = 'cargas' and not borrado and data->>'estado' = 'pedido' order by at limit 20`;
+      return res.status(200).json({ cargas: r.map((x) => ({ ...x.data, id: x.id })) });
+    }
+    if (q.op === 'carga_pdf' || q.op === 'carga_res') {
+      const id = String(b.id || '');
+      const c = id && id.length <= 200 ? await s`select data from docs where col = 'cargas' and id = ${id} and not borrado` : [];
+      if (!c.length) return res.status(404).json({ error: 'No existe ese pedido de carga' });
+      const d = c[0].data || {};
+      if (q.op === 'carga_pdf') {
+        const f = await s`select datos from archivos where id = ${String(d.pdf_id || '')}`;
+        if (!f.length) return res.status(404).json({ error: 'No está el PDF' });
+        res.setHeader('Content-Type', 'application/pdf');
+        return res.status(200).send(f[0].datos);
+      }
+      const estado = String(b.estado || '');
+      if (!['tomado', 'cargado', 'error', 'revisar'].includes(estado)) return res.status(400).json({ error: 'estado inválido' });
+      // un pedido que ya terminó no vuelve atrás
+      if (['cargado', 'revisar'].includes(d.estado) && d.estado !== estado) return res.status(200).json({ ok: true, igual: true });
+      const fin = estado !== 'tomado';
+      const r = sinNulos({ estado, mensaje: String(b.mensaje || '').slice(0, 1000), pjn_ids: Array.isArray(b.pjn_ids) ? b.pjn_ids.slice(0, 20) : [], destino: String(b.destino || '').slice(0, 300), fecha: String(b.fecha || '').slice(0, 40) });
+      await s`update docs set data = data || ${s.json(fin ? { ...r, resuelto_at: new Date().toISOString() } : { estado, tomado_at: new Date().toISOString() })}, ver = nextval('ver_seq'), at = now() where col = 'cargas' and id = ${id}`;
+      if (fin && d.escrito_id) {
+        const extra = estado === 'cargado' ? { estado: 'Presentado', presentado_at: new Date().toISOString() } : {};
+        await s`update docs set data = data || jsonb_build_object('envio', coalesce(data->'envio', '{}'::jsonb) || ${s.json(r)}) || ${s.json(extra)}, ver = nextval('ver_seq'), at = now()
+          where col = 'escritos' and id = ${String(d.escrito_id)} and not borrado and data->'envio'->>'id' = ${id}`;
+      }
+      return res.status(200).json({ ok: true });
     }
     return res.status(400).json({ error: 'Operación desconocida' });
   } catch (e) {
