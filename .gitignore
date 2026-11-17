@@ -2,3 +2,4 @@ node_modules
 .env*
 .vercel
 scripts/vercel_subir.txt
+scripts/vercel_subidos.json
