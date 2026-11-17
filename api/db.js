@@ -1,7 +1,7 @@
 // Base de documentos de la app (reemplaza la "db" de claude.ai): colecciones con documentos JSON.
 // POST {op, ...}. Ops: get, set, update, delete, add, lista, cambios.
 import crypto from 'node:crypto';
-import { base } from './_lib/base.js';
+import { base, sinNulos } from './_lib/base.js';
 import { exigir, cuerpo } from './_lib/sesion.js';
 
 const partir = (p) => { const s = String(p || '').replace(/^\/+|\/+$/g, ''); const i = s.lastIndexOf('/'); return i < 1 ? null : [s.slice(0, i), s.slice(i + 1)]; };
@@ -28,7 +28,7 @@ export default async function handler(req, res) {
         return res.status(200).json(r.length ? { exists: true, data: r[0].data } : { exists: false });
       }
       if (op === 'set') {
-        const data = b.data && typeof b.data === 'object' ? b.data : {};
+        const data = sinNulos(b.data && typeof b.data === 'object' ? b.data : {});
         if (b.merge) await s`insert into docs (col, id, data) values (${col}, ${id}, ${s.json(data)})
           on conflict (col, id) do update set data = case when docs.borrado then excluded.data else coalesce(docs.data, '{}'::jsonb) || excluded.data end, borrado = false, ver = nextval('ver_seq'), at = now()`;
         else await s`insert into docs (col, id, data) values (${col}, ${id}, ${s.json(data)})
@@ -36,7 +36,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
       if (op === 'update') {
-        const data = b.data && typeof b.data === 'object' ? b.data : {};
+        const data = sinNulos(b.data && typeof b.data === 'object' ? b.data : {});
         const r = await s`update docs set data = coalesce(data, '{}'::jsonb) || ${s.json(data)}, ver = nextval('ver_seq'), at = now()
           where col = ${col} and id = ${id} and not borrado returning id`;
         if (!r.length) return res.status(404).json({ error: 'No existe el documento', code: 'not_found' });
@@ -49,7 +49,7 @@ export default async function handler(req, res) {
     if (op === 'add') {
       const col = b.col; if (!colOk(col) || !permitida(col, u)) return res.status(400).json({ error: 'Colección inválida' });
       const id = nuevoId();
-      await s`insert into docs (col, id, data) values (${col}, ${id}, ${s.json(b.data && typeof b.data === 'object' ? b.data : {})})`;
+      await s`insert into docs (col, id, data) values (${col}, ${id}, ${s.json(sinNulos(b.data && typeof b.data === 'object' ? b.data : {}))})`;
       return res.status(200).json({ id });
     }
 
