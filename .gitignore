@@ -1,0 +1,4 @@
+node_modules
+.env*
+.vercel
+scripts/vercel_subir.txt

@@ -1,0 +1,11 @@
+{
+  "name": "estudio-pjn",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "22.x" },
+  "scripts": { "local": "node scripts/servidor_local.js" },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.9.0",
+    "postgres": "^3.4.5"
+  }
+}
