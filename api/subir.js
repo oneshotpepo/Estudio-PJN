@@ -6,7 +6,7 @@
 //   POST /api/subir?op=docs   JSON {col, docs:[{id, data}], merge?} -> guarda documentos
 //   POST /api/subir?op=limpiar JSON {mantener:[ids]} -> borra archivos de la PC que ya no se usan (solo los subidos por "pc")
 import crypto from 'node:crypto';
-import { base } from './_lib/base.js';
+import { base, sinNulos } from './_lib/base.js';
 
 export const config = { api: { bodyParser: false }, maxDuration: 60 };
 const MAX = 4 * 1024 * 1024;
@@ -51,9 +51,9 @@ export default async function handler(req, res) {
       if (!col || col.length > 200 || col.startsWith('/')) return res.status(400).json({ error: 'col inválida' });
       const docs = (Array.isArray(b.docs) ? b.docs : []).filter((d) => d && typeof d.id === 'string' && d.id && d.id.length <= 200 && d.data && typeof d.data === 'object');
       for (const d of docs) {
-        if (b.merge) await s`insert into docs (col, id, data) values (${col}, ${d.id}, ${s.json(d.data)})
+        if (b.merge) await s`insert into docs (col, id, data) values (${col}, ${d.id}, ${s.json(sinNulos(d.data))})
           on conflict (col, id) do update set data = case when docs.borrado then excluded.data else coalesce(docs.data, '{}'::jsonb) || excluded.data end, borrado = false, ver = nextval('ver_seq'), at = now()`;
-        else await s`insert into docs (col, id, data) values (${col}, ${d.id}, ${s.json(d.data)})
+        else await s`insert into docs (col, id, data) values (${col}, ${d.id}, ${s.json(sinNulos(d.data))})
           on conflict (col, id) do update set data = excluded.data, borrado = false, ver = nextval('ver_seq'), at = now()`;
       }
       return res.status(200).json({ ok: true, n: docs.length });

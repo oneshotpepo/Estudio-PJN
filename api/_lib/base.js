@@ -49,3 +49,11 @@ export async function ajuste(k, crear) {
   await s`insert into ajustes (k, v) values (${k}, ${v}) on conflict (k) do nothing`;
   return (await s`select v from ajustes where k = ${k}`)[0].v;
 }
+
+// Postgres no acepta el carácter nulo dentro de un texto JSON (aparece en modelos Word viejos): se quita antes de guardar.
+export function sinNulos(o) {
+  if (typeof o === 'string') return o.includes('\u0000') ? o.replaceAll('\u0000', '') : o;
+  if (Array.isArray(o)) return o.map(sinNulos);
+  if (o && typeof o === 'object') return Object.fromEntries(Object.entries(o).map(([k, v]) => [sinNulos(k), sinNulos(v)]));
+  return o;
+}
